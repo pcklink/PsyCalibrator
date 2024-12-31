@@ -1,4 +1,6 @@
-function Gamma = gammaMeasure_APL(deviceType, inputRects,whichScreen,outputFilename,beTestedCLUT,skipInputScreenInfo,skipCalibration,beTestedRGBs,LeaveTime,nMeasures)
+function Gamma = gammaMeasure_APL(deviceType, inputRects,whichScreen,...
+    outputFilename,beTestedCLUT,skipInputScreenInfo,skipCalibration,...
+    beTestedRGBs,LeaveTime,nMeasures,ptbrect)
 
 % Do gamma table measurement via spyder5/X or ColorCal MKII
 % Usage: Gamma = gammaMeasure_APL(deviceType, inputRects,whichScreen,outputFilename,beTestedCLUT,skipInputScreenInfo,beTestedRGBs,LeaveTime,nMeasures)
@@ -14,14 +16,22 @@ function Gamma = gammaMeasure_APL(deviceType, inputRects,whichScreen,outputFilen
 %          beTestedRGBs: to be tested RGBs, 1,2, or a n-row by 3-column matrix for gray, RGB channels, or customized RGBs respectively
 %             LeaveTime: how many seconds to leave the room (0-60): (default: 10)
 %             nMeasures: how many measures for each RGB
+%               ptbrect: ptb subrect for window emulation (default [] is fullscreen)
 %
 %
 % Yang Zhang
 % Attention and Perception Laboratory
 % Department of Psychology, Soochow University
 % 2020/12/18 9:16:50
+%
+% Chris Klink   
+% Vision & Cognition
+% Netherlands Institute for Neuroscience
+% 2024/12/30
 
-persistent myCorrectionMatrix, myDeviceType
+
+persistent myCorrectionMatrix
+persistent myDeviceType
 
 % ---- check input arguments ----/
 if ~exist('deviceType','var')||isempty(deviceType)
@@ -68,6 +78,10 @@ if ~exist('nMeasures','var')||isempty(nMeasures)
     nMeasures = 1;
 end
 
+if ~exist('ptbrect','var')||isempty(ptbrect)
+    ptbrect = [];
+end
+
 %--------------------------------\
 
 if isCustomizedClut
@@ -77,7 +91,17 @@ if isCustomizedClut
 end
 
 % Screen information
-if ~skipInputScreenInfo
+if iscell(skipInputScreenInfo)
+    Gamma.DisDes = skipInputScreenInfo{1};
+    Gamma.DisMod = skipInputScreenInfo{2};
+    Gamma.DisSer = skipInputScreenInfo{3};
+    Gamma.DisBri = skipInputScreenInfo{4};
+    Gamma.DisCon = skipInputScreenInfo{5};
+    Gamma.ColorTemperature = skipInputScreenInfo{6};
+    Gamma.whichDesktop = skipInputScreenInfo{7};
+    Gamma.OS = skipInputScreenInfo{8};
+    Gamma.GPU = skipInputScreenInfo{9};
+elseif ~skipInputScreenInfo
     Gamma.DisDes           = input('Enter monitor''s brand name (you can skip these questions by pressing the enter key): ','s');
     Gamma.DisMod           = input('Enter monitor''s model number: ','s');
     Gamma.DisSer           = input('Enter monitor''s serial number: ','s');
@@ -87,7 +111,6 @@ if ~skipInputScreenInfo
     Gamma.whichDesktop     = input('Enter computer name: ','s');
     Gamma.OS               = input('What''s the operation system (e.g., XP): ','s');
     Gamma.GPU              = input('What''s the brand of graphical card: ','s');
-    
 else
     Gamma.DisDes           = '';
     Gamma.DisMod           = '';
@@ -111,9 +134,15 @@ try
     Screen('Preference', 'SkipSyncTests', 1);
     Screen('Preference', 'VisualDebugLevel', 0);
     Screen('Preference', 'Verbosity', 0);
+
     
-    fullRect = Screen('Rect', whichScreen);
-    
+    if ~isempty(ptbrect)
+        fullRect = ptbrect;
+    else
+        fullRect = Screen('Rect', whichScreen);
+    end
+
+
     if isempty(inputRects)
         perperialRect = CenterRectOnPoint([0 0 500 500],fullRect(3)/2,fullRect(4)/2);
     else
@@ -165,13 +194,16 @@ try
     Stimuli.White = WhiteIndex(whichScreen);%
     Stimuli.Black = BlackIndex(whichScreen); %
     Stimuli.Gray  = [128,128,128];%(Stimuli.White+Stimuli.Black)/2;
-    
+    fprintf('Press any key to get started\n');
     pause;
     
     gammaTableBack = Screen('ReadNormalizedGammaTable', whichScreen);
     
-    [w,ScreenRect] = Screen('OpenWindow',whichScreen,Stimuli.Gray,[],32);
-    
+    %[w,ScreenRect] = Screen('OpenWindow',whichScreen,Stimuli.Gray,[],32);
+    PsychImaging('PrepareConfiguration');
+    [w, ScreenRect] = PsychImaging('OpenWindow',whichScreen,Stimuli.Gray,...
+        ptbrect,32,2,[],[],1);
+
     Screen('LoadNormalizedGammaTable',whichScreen,beTestedCLUT);
     
     %%%% start %%%%%
@@ -180,7 +212,7 @@ try
     refreshRate = 1/ifi;
     %%%%%%%%%%%%%%%%
     
-    Screen('TextSize',w,30);
+    Screen('TextSize',w,20);
     Screen('TextStyle',w,0);%0=normal,1=bold,2=italic,4=underline,8=outline,32=condense,64=extend
     Screen(w,'TextFont','Verdana');
     
@@ -204,6 +236,7 @@ try
             DrawFormattedText(w,'We need to calibrate the device first by establishing the black level.\n Now make sure the lens cover of the photometer is fully closed. \n Then hit any key to proceed.','center','center',Stimuli.White);
             Screen('Flip',w);
             abortExp(whichScreen,gammaTableBack,EscapeKey);
+            fprintf('Press any key to continue\n');
             KbPressWait;
         end
         
@@ -211,9 +244,10 @@ try
         switch deviceType
             case {1,2,5}
                 % do measure or calibration(if necessary) once
+                fprintf('Running self-calibration now\n')
                 spyderCalibration_APL(0);
                 
-                if ismember(deviceType, [2,5]) && spyderXDependCheck_APL == 2
+                if ismember(deviceType, [2,5]) && spyderXDependCheck_APL == 2 && IsWin
                     % the driver is not datacolor SpyderX
                     cprintf([0 0 1],['=========================================== Warning ============================================\n'...
                         'now PsyCalibrator can use PsychHID to control spyderX/X2, which is better/faster than spotread, \n'...
@@ -354,8 +388,9 @@ try
     Gamma.refreshRate      = refreshRate;
     Gamma.clut             = beTestedCLUT;
     Gamma.gammaTable       = beTestedCLUT;
-    
-    save(outputFilename,'Gamma');
+    Gamma.fn_out = [outputFilename '_' datestr(now, 'yyyymmdd_HHMM')];
+    Gamma.fn_path = []; 
+    save(fullfile(Gamma.fn_path,Gamma.fn_out),'Gamma');
     fprintf('----------------------------\n');
     fprintf('Data have been saved!\n');
     fprintf('----------------------------\n');

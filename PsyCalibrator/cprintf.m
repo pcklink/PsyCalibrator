@@ -197,12 +197,12 @@ function count = cprintf(style,format,varargin)
       % Get a handle to the Command Window component
       mde = com.mathworks.mde.desk.MLDesktop.getInstance;
       cw = mde.getClient('Command Window');
-      xCmdWndView = cw.getComponent(0).getViewport.getComponent(0);
+      %xCmdWndView = cw.getComponent(0).getViewport.getComponent(0);
 
       % Store the CW background color as a special color pref
       % This way, if the CW bg color changes (via File/Preferences), 
       % it will also affect existing rendered strs
-      com.mathworks.services.Prefs.setColorPref('CW_BG_Color',xCmdWndView.getBackground);
+      %com.mathworks.services.Prefs.setColorPref('CW_BG_Color',xCmdWndView.getBackground);
 
       % Display the text in the Command Window
       count1 = fprintf(2,format,varargin{:});
@@ -240,7 +240,7 @@ function count = cprintf(style,format,varargin)
 
       % Force a Command-Window repaint
       % Note: this is important in case the rendered str was not '\n'-terminated
-      xCmdWndView.repaint;
+      %xCmdWndView.repaint;
 
       % The following is for debug use only:
       el(end+1) = handle(docElement);  %#ok used in debug only

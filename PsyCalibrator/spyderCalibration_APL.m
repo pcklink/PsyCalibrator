@@ -7,6 +7,7 @@ end
 
 if printPromptInfo
     cprintf([0 0 1],'Instruction:\nWe need to calibrate the device first by establishing the black level.\nNow make sure the lens cover of the photometer is fully closed. \nThen hit any key to proceed.\n');
+    fprintf('Press any key to get started\n');
     pause;
 end
 
@@ -27,6 +28,8 @@ if spyderXDependCheck_APL
 
     if status
         error([results,char(13),'Calibration failed, see the infomation above for details']);
+        fprintf('For a SpyderX this could mean the device is too cold.\n');
+        fprintf('Warm it up a bit and try again\n');
     else
         fprintf('Calibration done!\n');
     end
